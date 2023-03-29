@@ -1,0 +1,962 @@
+clear all; close all;
+% Toe, Heel, and COR Translation Calculations
+% Inputs: Marker positions and lengths and angles from lateral hoof photographs
+% See Figure 2 in Symons, J.E., Garcia, T.C. and Stover, S.M. (2014) Distal 
+% hindlimb kinematics of galloping Thoroughbred racehorses on dirt and 
+% synthetic racetrack surfaces. Equine veterinary journal 46, 227-232.
+% Horses traveling from right to left in camera, positive is up and to the left
+ 
+% In this program it will prompt you to open the THT prep file.  It will automatically
+% read in each trial’s data (.2FT files) to get the hoof marker 
+% angle and the hoof marker’s coordinates for each video frame.  It calculates
+% where the toe and heel positions are and the solar hoof angle relative to 
+% horizontal are for each video frame.  The trial name in the 1st column of the
+% THT prep file tell the program what .FAN and .2FT file to open, so the spelling 
+% must match exactly.  Program will error if you don’t have .FAN or .2FT files 
+% in the folder for every trial listed in THT prep file. 
+% ** you will use either .FAN or .NA2
+% Program creates .THT files for each trial (with same file name as .FAN trials.
+ 
+ 
+
+
+
+clear all
+ 
+prompt = 'Sampling Frequency (500 Hz)';
+dlgtitle = 'Sampling Frequency (500 Hz)';
+dims = [1 50];
+dlgbox=inputdlg(prompt, dlgtitle, dims);
+freq=str2num(dlgbox{1});
+ 
+prompt = 'Do You Want to Save Data? Y(1) or N(0)';
+dlgtitle = 'Save Data';
+dims = [1 50];
+dlgbox=inputdlg(prompt, dlgtitle, dims);
+Save=str2num(dlgbox{1});
+ 
+hmsg=msgbox('Read in text file containing radiograph measurements');
+uiwait(hmsg);
+[evnts_name,evnts_path,filtindx] = uigetfile({'*.txt','Text Files (*.*)'},'Load "Radiograph_Measures', 'MultiSelect', 'off');
+if (filtindx == 0) return;end
+ 
+ 
+events_filename=strcat(evnts_path,evnts_name);
+ 
+fid3 = fopen(events_filename, 'r');
+eventsblockwheader =textscan(fid3, '%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s', 'delimiter', '\t');
+numrows=size(eventsblockwheader{1},1);
+for w=1:35
+    eventsblock{w} =eventsblockwheader{w}(2:numrows);
+end
+    fclose(fid3);
+    cd(evnts_path);
+ 
+trialheaders=eventsblock{1};
+lng=size(trialheaders,1);
+for rr=1:length(eventsblock)-1;
+    P(:,rr+1)=str2num(char(eventsblock{rr+1}));
+end
+ 
+ 
+for i=1:size(P,1)
+    
+  
+    char(trialheaders(i))
+    
+    % Read 2d displacements for markers 
+    % file is 2FT (filtered transformed coordinates)
+    %Remove zeros
+    Input=dlmread(strcat(char(trialheaders(i)),'.2FT'));
+    
+    for n=1:size(Input,1)
+        for o=1:size(Input,2)
+            if Input(n,o)==0;
+                E(n,o)=NaN;
+            else E(n,o)=Input(n,o);
+            end
+        end
+    end
+        
+   
+    RadPX=(E(:,1));
+    RadPY=(E(:,2));
+    RadDX=(E(:,4));
+    RadDY=(E(:,5));
+    MC3PX=(E(:,7));
+    MC3PY=(E(:,8));
+    MC3DX=(E(:,10));
+    MC3DY=(E(:,11));
+    PIX=(E(:,13));
+    PIY=(E(:,14));
+    HWDX=(E(:,16)); 
+    HWDY=(E(:,17));
+    HWPX=(E(:,19));
+    HWPY=(E(:,20));
+    GirthX=(E(:,43));
+    GirthY=(E(:,44));
+    Length=min([length(HWPX), length(HWPY), length(HWDX), length(HWDY),length(RadPX), length(RadPY), length(RadDX), length(RadDY), length(MC3PX), length(MC3PY), length(MC3DX), length(MC3DY), length(PIX), length(PIY)]);
+    
+    
+    
+    time=0:(1/500):Length;
+ 
+    s=P(i,34); e=P(i,35);
+    
+ 
+    l=1;
+    %Calculate Marker Angles
+    for l=1:Length
+        if (RadPY(l)-RadDY(l))>0
+            RadMarkAng(l,1)=90-(atand(-(RadPX(l)-RadDX(l))./(RadPY(l)-RadDY(l))));
+        else
+            RadMarkAng(l,1)=90-(atand(-(RadPX(l)-RadDX(l))./(RadPY(l)-RadDY(l))))-180;
+        end
+        if (MC3PY(l)-MC3DY(l))>0
+            MC3MarkAng(l,1)=90-(atand(-(MC3PX(l)-MC3DX(l))./(MC3PY(l)-MC3DY(l))));
+        else
+            MC3MarkAng(l,1)=90-(atand(-(MC3PX(l)-MC3DX(l))./(MC3PY(l)-MC3DY(l))))-180;
+        end
+        if (HWPY(l)-HWDY(l))>0
+            HWMarkAng(l,1)=90-(atand(-(HWPX(l)-HWDX(l))./(HWPY(l)-HWDY(l))));
+        else
+            HWMarkAng(l,1)=90-(atand(-(HWPX(l)-HWDX(l))./(HWPY(l)-HWDY(l))))-180;
+        end
+    end
+    
+    %Calculate X/Y Position of each Joint COR, Heel and Toe of Hoof.
+    RadProxAng=RadMarkAng+P(i,26);
+    RadDistAng=RadMarkAng+P(i,24);
+    RadiusCORXProx=RadPX-(-cosd(RadProxAng)*P(i,25));
+    RadiusCORYProx=RadPY-(sind(RadProxAng)*P(i,25));
+    RadiusCORXDist=RadDX-(-cosd(RadDistAng)*P(i,23));
+    RadiusCORYDist=RadDY-(sind(RadDistAng)*P(i,23));
+    
+    RadiusCORX=(RadiusCORXProx+RadiusCORXDist)./2;
+    RadiusCORY=(RadiusCORYProx+RadiusCORYDist)./2;
+    
+    checkradiusCOR=mean(sqrt((RadiusCORXProx(s:e)-RadiusCORXDist(s:e)).^2+(RadiusCORYProx(s:e)-RadiusCORYDist(s:e)).^2));
+ 
+    
+%     figure;
+%     plot(RadiusCORXProx, RadiusCORYProx);
+%     hold on
+%     plot(RadiusCORXDist, RadiusCORYDist);
+    
+    ElbowProxAng=RadMarkAng+P(i,30);
+    ElbowDistAng=RadMarkAng+P(i,28);
+    ElbowCORXProx=RadPX-(-cosd(ElbowProxAng)*P(i,29));
+    ElbowCORYProx=RadPY-(sind(ElbowProxAng)*P(i,29));
+    ElbowCORXDist=RadDX-(-cosd(ElbowDistAng)*P(i,27));
+    ElbowCORYDist=RadDY-(sind(ElbowDistAng)*P(i,27));
+    
+    ElbowCORX=(ElbowCORXProx+ElbowCORXDist)./2;
+    ElbowCORY=(ElbowCORYProx+ElbowCORYDist)./2;
+    
+    checkelbowCOR=mean((sqrt((ElbowCORXProx(s:e)-ElbowCORXDist(s:e)).^2+(ElbowCORYProx(s:e)-ElbowCORYDist(s:e)).^2)));
+ 
+    
+%     figure;
+%     plot(ElbowCORXProx, ElbowCORYProx);
+%     hold on
+%     plot(ElbowCORXDist, ElbowCORYDist);
+    
+    DistCarpProxAng=MC3MarkAng+P(i,22);
+    DistCarpDistAng=MC3MarkAng+P(i,20);
+    DistCarpCORXProx=MC3PX-(-cosd(DistCarpProxAng)*P(i,21));
+    DistCarpCORYProx=MC3PY-(sind(DistCarpProxAng)*P(i,21));
+    DistCarpCORXDist=MC3DX-(-cosd(DistCarpDistAng)*P(i,19));
+    DistCarpCORYDist=MC3DY-(sind(DistCarpDistAng)*P(i,19));
+    DistCarpCORX=(DistCarpCORXProx+DistCarpCORXDist)./2;
+    DistCarpCORY=(DistCarpCORYProx+DistCarpCORYDist)./2;
+    
+    checkDistCarpCOR=mean((sqrt((DistCarpCORXProx(s:e)-DistCarpCORXDist(s:e)).^2+(DistCarpCORYProx(s:e)-DistCarpCORYDist(s:e)).^2)));
+    
+%     figure;
+%     plot(DistCarpCORXProx, DistCarpCORYProx);
+%     hold on
+%     plot(DistCarpCORXDist, DistCarpCORYDist);
+    
+    MC3ProxAng=MC3MarkAng+P(i,18);
+    MC3DistAng=MC3MarkAng+P(i,16);
+    MC3CORXProx=MC3PX-(-cosd(MC3ProxAng)*P(i,17));
+    MC3CORYProx=MC3PY-(sind(MC3ProxAng)*P(i,17));
+    MC3CORXDist=MC3DX-(-cosd(MC3DistAng)*P(i,15));
+    MC3CORYDist=MC3DY-(sind(MC3DistAng)*P(i,15));
+    MC3CORX=(MC3CORXProx+MC3CORXDist)./2;
+    MC3CORY=(MC3CORYProx+MC3CORYDist)./2;
+    
+    checkMC3COR=mean((sqrt((MC3CORXProx(s:e)-MC3CORXDist(s:e)).^2+(MC3CORYProx(s:e)-MC3CORYDist(s:e)).^2)));
+ 
+%     figure;
+%     plot(MC3CORXProx, MC3CORYProx);
+%     hold on
+%     plot(MC3CORXDist, MC3CORYDist);
+    
+    m=1;
+for m=1:Length
+    if (MC3CORY(m)-PIY(m))>0
+        PIMarkAng(m,1)=90-(atand(-(MC3CORX(m)-PIX(m))./(MC3CORY(m)-PIY(m))));
+    else
+        PIMarkAng(m,1)=90-(atand(-(MC3CORX(m)-PIX(m))./(MC3CORY(m)-PIY(m))))-180;
+    end
+end
+ 
+    PIProxAng=PIMarkAng+P(i,14);
+    PIDistAng=PIMarkAng+P(i,12);
+    PICORXProx=MC3CORX-(-cosd(PIProxAng)*P(i,13));
+    PICORYProx=MC3CORY-(sind(PIProxAng)*P(i,13));
+    PICORXDist=PIX-(-cosd(PIDistAng)*P(i,11));
+    PICORYDist=PIY-(sind(PIDistAng)*P(i,11));
+    PICORX=(PICORXProx+PICORXDist)./2;
+    PICORY=(PICORYProx+PICORYDist)./2;
+    
+    checkPICOR=mean((sqrt((PICORXProx(s:e)-PICORXDist(s:e)).^2+(PICORYProx(s:e)-PICORYDist(s:e)).^2)));
+    
+%     figure;
+%     plot(PICORXProx, PICORYProx);
+%     hold on
+%     plot(PICORXDist, PICORYDist);
+    
+    PIIAng=HWMarkAng+P(i,10);
+    PIICORX=HWDX+(-cosd(PIIAng)*P(i,9));
+    PIICORY=HWDY+(sind(PIIAng)*P(i,9));
+    
+    PIIIAng=HWMarkAng+P(i,8);
+    PIIICORX=HWDX+(-cosd(PIIIAng)*P(i,7));
+    PIIICORY=HWDY+(sind(PIIIAng)*P(i,7));
+    
+    ToeAng=HWMarkAng+P(i,5);
+    ToeCORX=HWDX+(-cosd(ToeAng)*P(i,3));
+    ToeCORY=HWDY+(sind(ToeAng)*P(i,3));
+    
+    HeelAng=HWMarkAng+P(i,6);
+    HeelCORX=HWDX+(-cosd(HeelAng)*P(i,4));
+    HeelCORY=HWDY+(sind(HeelAng)*P(i,4));
+ 
+    %Compare Radiograph and Marker Distances
+    radiusdistancecheck=mean((sqrt((RadPX(s:e)-RadDX(s:e)).^2+(RadPY(s:e)-RadDY(s:e)).^2)-P(i,31)));
+    radiusmarkermotion=std((sqrt((RadPX(s:e)-RadDX(s:e)).^2+(RadPY(s:e)-RadDY(s:e)).^2)-P(i,31)));
+    mc3distancecheck=mean((sqrt((MC3PX(s:e)-MC3DX(s:e)).^2+(MC3PY(s:e)-MC3DY(s:e)).^2)-P(i,32)));
+    mc3markermotion=std((sqrt((MC3PX(s:e)-MC3DX(s:e)).^2+(MC3PY(s:e)-MC3DY(s:e)).^2)-P(i,32)));
+    p1distancecheck=mean((sqrt((MC3CORX(s:e)-PIX(s:e)).^2+(MC3CORY(s:e)-PIY(s:e)).^2)-P(i,33)));
+    p1markermotion=std((sqrt((MC3CORX(s:e)-PIX(s:e)).^2+(MC3CORY(s:e)-PIY(s:e)).^2)-P(i,33)));
+    hoofwanddistancecheck=mean((sqrt((HWPX(s:e)-HWDX(s:e)).^2+(HWDY(s:e)-HWPY(s:e)).^2)-0.09608));
+    hoofwandmarkermotion=std((sqrt((HWPX(s:e)-HWDX(s:e)).^2+(HWDY(s:e)-HWPY(s:e)).^2)-0.09608));
+ 
+    k=1;
+    %Calculate Anatomical Angles
+    for k=1:Length
+            SHA(k,1)=HWMarkAng(k)-P(i,2);
+        
+        if (ElbowCORY(k)-RadiusCORY(k))>0
+            RadiusCORwrtSurface(k,1)=90-(atand(-(ElbowCORX(k)-RadiusCORX(k))./(ElbowCORY(k)-RadiusCORY(k))));
+        else
+            RadiusCORwrtSurface(k,1)=90-(atand(-(ElbowCORX(k)-RadiusCORX(k))./(ElbowCORY(k)-RadiusCORY(k))))-180;
+        end
+ 
+        if (DistCarpCORY(k)-MC3CORY(k))>0
+            FetlockCORwrtSurface(k,1)=90-(atand(-(DistCarpCORX(k)-MC3CORX(k))./(DistCarpCORY(k)-MC3CORY(k))));
+        else
+            FetlockCORwrtSurface(k,1)=90-(atand(-(DistCarpCORX(k)-MC3CORX(k))./(DistCarpCORY(k)-MC3CORY(k))))-180;
+        end
+        
+        if (MC3CORY(k)-PICORY(k))>0
+            PICORwrtSurface(k,1)=90-(atand(-(MC3CORX(k)-PICORX(k))./(MC3CORY(k)-PICORY(k))));
+        else
+            PICORwrtSurface(k,1)=90-(atand(-(MC3CORX(k)-PICORX(k))./(MC3CORY(k)-PICORY(k))))-180;
+        end
+        
+         if (PICORY(k)-PIICORY(k))>0
+            PIICORwrtSurface(k,1)=90-(atand(-(PICORX(k)-PIICORX(k))./(PICORY(k)-PIICORY(k))));
+         else
+                    PIICORwrtSurface(k,1)=90-(atand(-(PICORX(k)-PIICORX(k))./(PICORY(k)-PIICORY(k))))-180;
+         end
+    
+         if (PIICORY(k)-PIIICORY(k))>0
+            PIIICORwrtSurface(k,1)=90-(atand(-(PIICORX(k)-PIIICORX(k))./(PIICORY(k)-PIIICORY(k))));
+         else
+            PIIICORwrtSurface(k,1)=90-(atand(-(PIICORX(k)-PIIICORX(k))./(PIICORY(k)-PIIICORY(k))))-180;
+         end
+    end
+ 
+    
+    CarpalAngle=FetlockCORwrtSurface-RadiusCORwrtSurface;
+    FetlockAngle=PICORwrtSurface-FetlockCORwrtSurface;
+    PIPAngle=PIICORwrtSurface-PICORwrtSurface;
+    DIPAngle=PIIICORwrtSurface-PIICORwrtSurface;
+    
+    Angles=[CarpalAngle, FetlockAngle, PIPAngle, DIPAngle, SHA];
+    
+    if SHA(s)>0
+        SurfaceY=ToeCORY(s);
+        HoofStrike="Toe";
+    else
+        SurfaceY=HeelCORY(s);
+        HoofStrike="Heel";
+    end
+        
+     if SHA(e)>0
+         HoofOff="Toe";
+     else
+        HoofOff="Heel";
+     end
+     
+     PIIICORXZero=PIIICORX-MC3CORX(s);
+     PIIICORYZero=PIIICORY-SurfaceY;
+     PIICORXZero=PIICORX-MC3CORX(s);
+     PIICORYZero=PIICORY-SurfaceY;
+     PICORXZero=PICORX-MC3CORX(s);
+     PICORYZero=PICORY-SurfaceY;
+     MC3CORXZero=MC3CORX-MC3CORX(s);
+     MC3CORYZero=MC3CORY-SurfaceY;
+     DistCarpCORXZero=DistCarpCORX-MC3CORX(s);
+     DistCarpCORYZero=DistCarpCORY-SurfaceY;
+     RadiusCORXZero=RadiusCORX-MC3CORX(s);
+     RadiusCORYZero=RadiusCORY-SurfaceY;
+     ElbowCORXZero=ElbowCORX-MC3CORX(s);
+     ElbowCORYZero=ElbowCORY-SurfaceY;
+     ToeCORXZero=ToeCORX-MC3CORX(s);
+     ToeCORYZero=ToeCORY-SurfaceY;
+     HeelCORXZero=HeelCORX-MC3CORX(s);
+     HeelCORYZero=HeelCORY-SurfaceY;
+     GirthXZero=GirthX-MC3CORX(s);
+     GirthYZero=GirthY-SurfaceY;
+     
+    %Angles as Percent Stance
+    percent=((time(s:e)-time(s))*freq)*((1/(e-s))*100);
+    
+    
+%          %Animated plot for joint angles
+    fig1=figure;
+%     tiledlayout(3,3);
+%     if Save==1
+%         myVideo= VideoWriter(strcat('Animation', char(trialheaders(i)),'.avi'));
+%         open(myVideo)
+%     end
+    for j=(s):(e)
+        
+        nexttile(1);
+        cla(1);
+        nexttile(1);
+        xlim([-1,1]);
+        ylim([-0.5, 1.5]);
+        axis square;
+        title('Forelimb Motion');
+        xlabel('Position X (m)'); ylabel('PositionY (m)');
+        curve= animatedline;
+        curve2= animatedline;
+        curve3=animatedline;
+        addpoints(curve, -ElbowCORXZero(j),ElbowCORYZero(j));
+        addpoints(curve, -RadiusCORXZero(j),RadiusCORYZero(j));
+        addpoints(curve2, -DistCarpCORXZero(j), DistCarpCORYZero(j));
+        addpoints(curve2, -MC3CORXZero(j), MC3CORYZero(j));
+        addpoints(curve2, -PICORXZero(j), PICORYZero(j));
+        addpoints(curve2, -PIICORXZero(j), PIICORYZero(j));
+        addpoints(curve2, -PIIICORXZero(j), PIIICORYZero(j));
+        addpoints(curve3, -ToeCORXZero(j), ToeCORYZero(j));
+        addpoints(curve3, -HeelCORXZero(j), HeelCORYZero(j));
+        
+%         nexttile(2);
+%         cla(1);
+%         nexttile(2);
+%         xlim([-0.5,0.25]);
+%         ylim([-0.25, 0.5]);
+%         axis square;
+%         title('Forelimb Motion');
+%         xlabel('Position X (m)'); ylabel('PositionY (m)');
+%         curve= animatedline;
+%         curve2= animatedline;
+%         curve3=animatedline;
+%         addpoints(curve2, -MC3CORXZero(j), MC3CORYZero(j));
+%         addpoints(curve2, -PICORXZero(j), PICORYZero(j));
+%         addpoints(curve2, -PIICORXZero(j), PIICORYZero(j));
+%         addpoints(curve2, -PIIICORXZero(j), PIIICORYZero(j));
+%         addpoints(curve3, -ToeCORXZero(j), ToeCORYZero(j));
+%         addpoints(curve3, -HeelCORXZero(j), HeelCORYZero(j));
+        
+%         nexttile(2);
+%         plot(percent, CarpalAngle(s:e));
+%         curve4= animatedline('Marker', 'o');
+%         addpoints(curve4, percent(j-s+1), CarpalAngle(j));
+%         xlabel('Percent Stance (%)'); ylabel('Angle (deg)');
+%         xlim([0,100]);
+%         ylim([-100,100]);
+%         title('Carpal Angle');
+%         
+%         nexttile(3);
+%         plot(percent, FetlockAngle(s:e));
+%         curve5= animatedline('Marker', 'o');
+%         addpoints(curve5, percent(j-s+1), FetlockAngle(j));
+%         xlabel('Percent Stance (%)'); ylabel('Angle (deg)');
+%         xlim([0,100]);
+%         ylim([-100,100]);
+%         title('Fetlock Angle');
+%         
+%         nexttile(4);
+%         plot(percent, PIPAngle(s:e));
+%         curve6= animatedline('Marker', 'o');
+%         addpoints(curve6, percent(j-s+1), PIPAngle(j));
+%         xlabel('Percent Stance (%)'); ylabel('Angle (deg)');
+%         xlim([0,100]);
+%         ylim([-100,100]);
+%         title('PIP Angle');
+%         
+%         nexttile(5);
+%         plot(percent, DIPAngle(s:e));
+%         curve7= animatedline('Marker', 'o');
+%         addpoints(curve7, percent(j-s+1), DIPAngle(j));
+%         xlabel('Percent Stance (%)'); ylabel('Angle (deg)');
+%         xlim([0,100]);
+%         ylim([-100,100]);
+%         title('DIP Angle');
+%         
+%         nexttile(6);
+%         plot(percent, SHA(s:e));
+%         curve8= animatedline('Marker', 'o');
+%         addpoints(curve8, percent(j-s+1), SHA(j));
+%         xlabel('Percent Stance (%)'); ylabel('Angle (deg)');
+%         xlim([0,100]);
+%         ylim([-100,100]);
+%         title('SHA Angle');
+        drawnow
+        pause(0.05);
+        
+%         if Save==1
+%             frame=getframe(fig1);
+%             writeVideo(myVideo,frame);
+%         end
+        
+    end
+%         if Save==1
+%         close(myVideo);
+%         end
+        
+    close;
+    
+    %Plot Angles as Percent Stance
+    figure;
+    scatter(percent, CarpalAngle(s:e));
+    xlabel('Percent Stance (%)'); ylabel('Carpal Angle (deg)');
+     xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'CarpalAngle.fig'));
+    end
+    pause(1);
+    close;
+    
+    figure;
+    scatter(percent, FetlockAngle(s:e));
+    xlabel('Percent Stance (%)'); ylabel('Fetlock Angle (deg)');
+     xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'FetlockAngle.fig'));
+    end
+    pause(1);
+    close;
+    
+    figure;
+    scatter(percent, PIPAngle(s:e));
+    xlabel('Percent Stance (%)'); ylabel('PIP Angle (deg)');
+     xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'PIPAngle.fig'));
+    end
+     pause(1);
+    close;
+    
+    figure;
+    scatter(percent, DIPAngle(s:e));
+    xlabel('Percent Stance (%)'); ylabel('DIP Angle (deg)');
+     xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'DIPAngle.fig'));
+    end
+     pause(1);
+    close;
+    
+    figure;
+    scatter(percent, SHA(s:e));
+    xlabel('Percent Stance (%)'); ylabel('Hoof Angle (deg)');
+     xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'HoofAngle.fig'));
+    end
+     pause(1);
+    close;
+    
+    %Calculate Stance Time
+    StanceTime=time(e)-time(s);
+    
+    y=1;
+    %Calculate Min/Max/Avg/Integral of each angle during stance
+    for y=1:size(Angles,2);
+        [Max(i,y), MaxInd(i,y)]=max(Angles((s:e),y));
+        MaxPercentStance(i,y)=percent(MaxInd(i,y));
+        [Min(i,y), MinInd(i,y)]=min(Angles((s:e),y));
+        MinPercentStance(i,y)=percent(MinInd(i,y));
+        Avg(i,y)=mean(Angles((s:e),y));
+        Integral(i,y)=trapz(Angles((s:e),y))*(1/freq);
+        
+        %Calculate Angular Velocity and Acceleration
+        AngVel(:,y)=[diff(Angles(:,y))/(1/freq);NaN];
+        AngAcc(:,y)=[diff(AngVel(:,y))/(1/freq);NaN];
+        
+        %Calculate Min/Max/Avg of Angular Velocity and Acceleration during
+        %stance
+        
+        [VelMax(i,y), VelMaxInd(i,y)]=max(AngVel((s:e),y));
+        VelMaxPercentStance(i,y)=percent(VelMaxInd(i,y));
+        [VelMin(i,y), VelMinInd(i,y)]=min(AngVel((s:e),y));
+        VelMinPercentStance(i,y)=percent(VelMinInd(i,y));
+        VelAvg(i,y)=mean(AngVel((s:e),y));
+        
+        [AccMax(i,y), AccMaxInd(i,y)]=max(AngAcc((s:e),y));
+        AccMaxPercentStance(i,y)=percent(AccMaxInd(i,y));
+        [AccMin(i,y), AccMinInd(i,y)]=min(AngAcc((s:e),y));
+        AccMinPercentStance(i,y)=percent(AccMinInd(i,y));
+        AccAvg(i,y)=mean(AngAcc((s:e),y));
+        
+    end
+    
+    %Check 
+        figure;
+    scatter(percent, AngVel((s:e),1));
+    xlabel('Percent Stance (%)'); ylabel('Carpal Angular Velocity (deg/s)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'CarpalAngVel.fig'));
+    end
+    close;
+    
+    %Plot Angular Velocity and Acceleration as Percent Stance
+    figure;
+    scatter(percent, AngVel((s:e),1));
+    xlabel('Percent Stance (%)'); ylabel('Carpal Angular Velocity (deg/s)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'CarpalAngVel.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, AngVel((s:e),2));
+    xlabel('Percent Stance (%)'); ylabel('Fetlock Angular Velocity (deg/s)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'FetlockAngVel.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, AngVel((s:e),3));
+    xlabel('Percent Stance (%)'); ylabel('PIP Angular Velocity (deg/s)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'PIPAngVel.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, AngVel((s:e),4));
+    xlabel('Percent Stance (%)'); ylabel('DIP Angular Velocity (deg/s)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'DIPAngVel.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, AngVel((s:e),5));
+    xlabel('Percent Stance (%)'); ylabel('Hoof Angular Velocity (deg/s)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'HoofAngVel.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, AngAcc((s:e),1));
+    xlabel('Percent Stance (%)'); ylabel('Carpal Angular Acceleration (deg/s^2)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'CarpalAngAcc.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, AngAcc((s:e),2));
+    xlabel('Percent Stance (%)'); ylabel('Fetlock Angular Acceleration (deg/s^2)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'FetlockAngAcc.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, AngAcc((s:e),3));
+    xlabel('Percent Stance (%)'); ylabel('PIP Angular Acceleration (deg/s^2)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'PIPAngAcc.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, AngAcc((s:e),4));
+    xlabel('Percent Stance (%)'); ylabel('DIP Angular Acceleration (deg/s^2)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'DIPAngAcc.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, AngAcc((s:e),5));
+    xlabel('Percent Stance (%)'); ylabel('Hoof Angular Acceleration (deg/s^2)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'HoofAngAcc.fig'));
+    end
+    close;
+    
+    
+    %Calculate Horse Velocity and Acceleration
+    figure;
+    scatter(percent, -GirthXZero(s:e));
+    xlabel('Percent Stance (%)'); ylabel('Position X (m)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'GirthPositionX.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, GirthYZero(s:e));
+    xlabel('Percent Stance (%)'); ylabel('Position Y (m)');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'GirthPositionY.fig'));
+    end
+    close;
+    
+    HorseVelocityX=[diff(GirthX)/(1/freq); NaN];
+    HorseVelocityY=[diff(GirthY)/(1/freq); NaN];
+    HorseVelocityR=[sqrt(HorseVelocityX.^2+HorseVelocityY.^2)];
+    HorseVelocityAng=[atand(HorseVelocityY./HorseVelocityX)];
+    
+    HorseAccX=[diff(HorseVelocityX)/(1/freq); NaN];
+    HorseAccY=[diff(HorseVelocityY)/(1/freq); NaN];
+    HorseAccR=sqrt(HorseAccX.^2+HorseAccY.^2);
+    HorseAccAng=atand(HorseAccY./HorseAccX);
+    
+    HorseVel=[HorseVelocityX, HorseVelocityY, HorseVelocityR, HorseVelocityAng];
+    HorseAcc=[HorseAccX, HorseAccY, HorseAccR, HorseAccAng];
+    
+    a=1;
+    for a=1:size(HorseVel,2)
+        [VelHorseMax(i,a), VelHorseMaxInd(i,a)]=max(HorseVel((s:e),a));
+        VelHorseMaxPercentStance(i,a)=percent(VelHorseMaxInd(i,a));
+        [VelHorseMin(i,a), VelHorseMinInd(i,a)]=min(HorseVel((s:e),a));
+        VelHorseMinPercentStance(i,a)=percent(VelHorseMinInd(i,a));
+        VelHorseAvg(i,a)=mean(HorseVel((s:e),a));
+        if s-5>0
+            VelHorsePreStance(i,a)=mean(HorseVel((s-5:s),a));
+        else
+            VelHorsePreStance(i,a)=HorseVel(s,a);
+        end
+        VelHorsePostStance(i,a)=mean(HorseVel((e:e+5), a));
+        
+        [AccHorseMax(i,a), AccHorseMaxInd(i,a)]=max(HorseAcc((s:e),a));
+        AccHorseMaxPercentStance(i,a)=percent(AccHorseMaxInd(i,a));
+        [AccHorseMin(i,a), AccHorseMinInd(i,a)]=min(HorseAcc((s:e),a));
+        AccHorseMinPercentStance(i,a)=percent(AccHorseMinInd(i,a));
+        AccHorseAvg(i,a)=mean(HorseAcc((s:e),a));
+        if s-5>0
+            AccHorsePreStance(i,a)=mean(HorseAcc((s-5:s),a));
+        else
+            AccHorsePreStance(i,a)=(HorseAcc(s,a));
+        end
+        AccHorsePostStance(i,a)=mean(HorseAcc((e:e+5), a));
+    end
+    
+    figure;
+    quiver(-(GirthX(s:e)-MC3CORX(s)), (GirthY(s:e)-SurfaceY), -HorseVelocityX(s:e), HorseVelocityY(s:e));
+    xlabel('Position X (m)'); ylabel('Position Y (m)');
+    if Save==1
+        savefig(strcat(trialheaders{i},'HorseVel.fig'));
+    end
+    close;
+    
+    figure;
+    quiver(-(GirthX(s:e)-MC3CORX(s)), (GirthY(s:e)-SurfaceY), -HorseAccX(s:e), HorseAccY(s:e));
+        xlabel('Position X (m)'); ylabel('Position Y (m)');
+    if Save==1
+        savefig(strcat(trialheaders{i},'HorseAcc.fig'));
+    end
+    close;
+    
+    %Calculate Hoof Velocity and Acceleration
+    ToeVelocityX=[diff(ToeCORX)/(1/freq); NaN];
+    ToeVelocityY=[diff(ToeCORY)/(1/freq); NaN];
+    ToeVelocityR=[sqrt(ToeVelocityX.^2+ToeVelocityY.^2)];
+    ToeVelocityAng=[atand(ToeVelocityY./ToeVelocityX)];
+    
+    HeelVelocityX=[diff(HeelCORX)/(1/freq); NaN];
+    HeelVelocityY=[diff(HeelCORY)/(1/freq); NaN];
+    HeelVelocityR=[sqrt(HeelVelocityX.^2+HeelVelocityY.^2)];
+    HeelVelocityAng=[atand(HeelVelocityY./HeelVelocityX)];
+    
+    ToeAccX=[diff(ToeVelocityX)/(1/freq); NaN];
+    ToeAccY=[diff(ToeVelocityY)/(1/freq); NaN];
+    ToeAccR=[sqrt(ToeAccX.^2+ToeAccY.^2)];
+    ToeAccAng=[atand(ToeAccY./ToeAccX)];
+    
+    HeelAccX=[diff(HeelVelocityX)/(1/freq); NaN];
+    HeelAccY=[diff(HeelVelocityY)/(1/freq); NaN];
+    HeelAccR=[sqrt(HeelAccX.^2+HeelAccY.^2)];
+    HeelAccAng=[atand(HeelAccY./HeelAccX)];
+    
+    figure;
+    scatter(percent, ToeCORXZero(s:e));
+    hold on 
+    scatter(percent, HeelCORXZero(s:e));
+    xlabel('Percent Stance (%)'); ylabel('Position X (m)'); legend('Toe Position', 'Heel Position');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'HoofPositionX.fig'));
+    end
+    close;
+    
+    figure;
+    scatter(percent, ToeCORYZero(s:e));
+    hold on 
+    scatter(percent, HeelCORYZero(s:e));
+    xlabel('Percent Stance (%)'); ylabel('Position Y (m)'); legend('Toe Position', 'Heel Position');
+    xlim([0, 100]);
+    if Save==1
+        savefig(strcat(trialheaders{i},'HoofPositionY.fig'));
+    end
+    close;
+    
+    figure;
+    quiver(-ToeCORXZero(s:e), ToeCORYZero(s:e), -ToeVelocityX(s:e), ToeVelocityY(s:e));
+    hold on;
+    quiver(-HeelCORXZero(s:e), HeelCORYZero(s:e), -HeelVelocityX(s:e), HeelVelocityY(s:e));
+    xlabel('Position X (m)'); ylabel('Position Y (m)'); legend('Toe Velocity', 'Heel Velocity');
+    
+    if Save==1
+        savefig(strcat(trialheaders{i},'HoofVel.fig'));
+    end
+    close;
+    
+    figure;
+    quiver(-ToeCORXZero(s:e), ToeCORYZero(s:e), -ToeAccX(s:e), ToeAccY(s:e));
+    hold on;
+    quiver(-HeelCORXZero(s:e), HeelCORYZero(s:e), -HeelAccX(s:e), HeelAccY(s:e));
+    xlabel('Position X (m)'); ylabel('Position Y (m)'); legend('Toe Acceleration', 'Heel Acceleration');
+    if Save==1
+        savefig(strcat(trialheaders{i},'HoofAcc.fig'));
+    end
+    close;
+    
+    %Split stance into slide, support and grip phases
+    
+    fh1=figure;
+    fh1.WindowState = 'maximized';
+    tiledlayout(1,2);
+    nexttile;
+    scatter(time(s:e), ToeCORX(s:e)); hold on; scatter(time(s:e), HeelCORX(s:e));
+    xlabel('Time (s)'); ylabel('X Position (m/s)'); title ('Hoof Horizontal Position during Stance'); legend ('ToePositionX', 'HeelPositionX');
+    nexttile;
+    scatter(time(s:e), ToeVelocityX(s:e)); hold on; scatter(time(s:e), HeelVelocityX(s:e));
+    xlabel('Time (s)'); ylabel('X Velocity (m/s)'); legend ('ToeVelocityX', 'HeelVelocityX');
+    
+    hh=helpdlg('Select the End of Horizontal Slide (Velocity X of Heel and Toe is ~0)');
+    uiwait(hh);
+    
+   
+    [timeslideend{i},toevelocityslideend{i}]=ginput(1);
+    [M, indslideend]= min(abs(time-timeslideend{i}));
+    
+    close;
+    
+    fh2=figure;
+    fh2.WindowState = 'maximized';
+    tiledlayout(1,2);
+    nexttile;
+    scatter(time(s:e), ToeCORY(s:e)); hold on; scatter(time(s:e), HeelCORY(s:e))
+    xlabel('Time (s)'); ylabel('Y Position (m/s)'); legend ('ToePositionY', 'HeelPositionY');
+    nexttile;
+    scatter(time(s:e), ToeVelocityY(s:e)); hold on; scatter(time(s:e), HeelVelocityY(s:e));
+    xlabel('Time (s)'); ylabel('Y Velocity (m/s)'); legend ('ToeVelocityY', 'HeelVelocityY');
+    
+    hh=helpdlg('Select the End of Support (Velocity Y changes from ~0)');
+    uiwait(hh);
+    
+    [timesupportend{i},toevelocitysupportend{i}]=ginput(1);
+    [N, indsupportend]=min(abs(time-timesupportend{i}));
+    
+    close;
+    
+    fh3=figure;
+    fh3.WindowState = 'maximized';
+    tiledlayout(1,2);
+    nexttile;
+    scatter(percent, ToeCORX(s:e)); hold on; scatter(percent, HeelCORX(s:e));
+    xlabel('Percent Stance (%)'); ylabel('X Position (m/s)'); title ('Hoof Horizontal Position during Stance'); legend ('ToePositionX', 'HeelPositionX');
+    nexttile;
+    scatter(percent, ToeCORY(s:e)); hold on; scatter(percent, HeelCORY(s:e))
+    xlabel('Percent Stance (%)'); ylabel('Y Position (m/s)'); title ('Hoof Vertical Position during Stance'); legend ('ToePositionY', 'HeelPositionY');
+    
+    ToeXDispSlide{i}=ToeCORX(indslideend)-ToeCORX(s);
+    ToeYDispSlide{i}=ToeCORY(indslideend)-ToeCORY(s);
+    HeelXDispSlide{i}=HeelCORX(indslideend)-HeelCORX(s);
+    HeelYDispSlide{i}=HeelCORY(indslideend)-HeelCORY(s);
+    
+    ToeXDispSupport{i}=ToeCORX(indsupportend)-ToeCORX(indslideend);
+    ToeYDispSupport{i}=ToeCORY(indsupportend)-ToeCORY(indslideend);
+    HeelXDispSupport{i}=HeelCORX(indsupportend)-HeelCORX(indslideend);
+    HeelYDispSupport{i}=HeelCORY(indsupportend)-HeelCORY(indslideend);
+    
+    ToeXDispGrab{i}=ToeCORX(e)-ToeCORX(indsupportend);
+    ToeYDispGrab{i}=ToeCORY(e)-ToeCORY(indsupportend);
+    HeelXDispGrab{i}=HeelCORX(e)-HeelCORX(indsupportend);
+    HeelYDispGrab{i}=HeelCORY(e)-HeelCORY(indsupportend);
+    
+    HoofVel=[ToeVelocityX, ToeVelocityY, ToeVelocityR, ToeVelocityAng, HeelVelocityX, HeelVelocityY, HeelVelocityR, HeelVelocityAng];
+    HoofAcc=[ToeAccX, ToeAccY, ToeAccR, ToeAccAng, HeelAccX, HeelAccY, HeelAccR, HeelAccAng];
+    
+    percentslide=((time(s:indslideend)-time(s))*freq)*((1/(indslideend-s))*100);
+    SlideTime=time(indslideend)-time(s);
+    percentsupport=((time(indslideend:indsupportend)-time(indslideend))*freq)*((1/(indsupportend-indslideend))*100);
+    SupportTime=time(indsupportend)-time(indslideend);
+    percentgrab=((time(indsupportend:e)-time(indsupportend))*freq)*((1/(e-indsupportend))*100);
+    GrabTime=time(e)-time(indsupportend);
+    
+    b=1;
+    %Find Min/Max/Average for Hoof Position during 3 phases of stance
+    for b=1:size(HoofVel,2)
+        [VelHoofMaxStance(i,b), VelHoofMaxIndStance(i,b)]=max(HoofVel((s:e),b));
+        VelHoofMaxPercentStance(i,b)=percent(VelHoofMaxIndStance(i,b));
+        [VelHoofMinStance(i,b), VelHoofMinIndStance(i,b)]=min(HoofVel((s:e),b));
+        VelHoofMinPercentStance(i,b)=percent(VelHoofMinIndStance(i,b));
+        VelHoofAvgStance(i,b)=mean(HoofVel((s:e),b));
+        
+        [VelHoofMaxSlide(i,b), VelHoofMaxIndSlide(i,b)]=max(HoofVel((s:indslideend),b));
+        VelHoofMaxPercentSlide(i,b)=percentslide(VelHoofMaxIndSlide(i,b));
+        [VelHoofMinSlide(i,b), VelHoofMinIndSlide(i,b)]=min(HoofVel((s:indslideend),b));
+        VelHoofMinPercentSlide(i,b)=percentslide(VelHoofMinIndSlide(i,b));
+        VelHoofAvgSlide(i,b)=mean(HoofVel((s:indslideend),b));
+        
+        [VelHoofMaxSupport(i,b), VelHoofMaxIndSupport(i,b)]=max(HoofVel((indslideend:indsupportend),b));
+        VelHoofMaxPercentSupport(i,b)=percentsupport(VelHoofMaxIndSupport(i,b));
+        [VelHoofMinSupport(i,b), VelHoofMinIndSupport(i,b)]=min(HoofVel((indslideend:indsupportend),b));
+        VelHoofMinPercentSupport(i,b)=percentsupport(VelHoofMinIndSupport(i,b));
+        VelHoofAvgSupport(i,b)=mean(HoofVel((indslideend:indsupportend),b));
+        
+        [VelHoofMaxGrab(i,b), VelHoofMaxIndGrab(i,b)]=max(HoofVel((indsupportend:e),b));
+        VelHoofMaxPercentGrab(i,b)=percentgrab(VelHoofMaxIndGrab(i,b));
+        [VelHoofMinGrab(i,b), VelHoofMinIndGrab(i,b)]=min(HoofVel((indsupportend:e),b));
+        VelHoofMinPercentGrab(i,b)=percentgrab(VelHoofMinIndGrab(i,b));
+        VelHoofAvgGrab(i,b)=mean(HoofVel((indsupportend:e),b));
+        
+        [AccHoofMaxStance(i,b), AccHoofMaxIndStance(i,b)]=max(HoofAcc((s:e),b));
+        AccHoofMaxPercentStance(i,b)=percent(AccHoofMaxIndStance(i,b));
+        [AccHoofMinStance(i,b), AccHoofMinIndStance(i,b)]=min(HoofAcc((s:e),b));
+        AccHoofMinPercentStance(i,b)=percent(AccHoofMinIndStance(i,b));
+        AccHoofAvgStance(i,b)=mean(HoofAcc((s:e),b));
+        
+        [AccHoofMaxSlide(i,b), AccHoofMaxIndSlide(i,b)]=max(HoofAcc((s:indslideend),b));
+        AccHoofMaxPercentSlide(i,b)=percentslide(AccHoofMaxIndSlide(i,b));
+        [AccHoofMinSlide(i,b), AccHoofMinIndSlide(i,b)]=min(HoofAcc((s:indslideend),b));
+        AccHoofMinPercentSlide(i,b)=percentslide(AccHoofMinIndSlide(i,b));
+        AccHoofAvgSlide(i,b)=mean(HoofAcc((s:indslideend),b));
+        
+        [AccHoofMaxSupport(i,b), AccHoofMaxIndSupport(i,b)]=max(HoofAcc((indslideend:indsupportend),b));
+        AccHoofMaxPercentSupport(i,b)=percentsupport(AccHoofMaxIndSupport(i,b));
+        [AccHoofMinSupport(i,b), AccHoofMinIndSupport(i,b)]=min(HoofAcc((indslideend:indsupportend),b));
+        AccHoofMinPercentSupport(i,b)=percentsupport(AccHoofMinIndSupport(i,b));
+        AccHoofAvgSupport(i,b)=mean(HoofAcc((indslideend:indsupportend),b));
+        
+        [AccHoofMaxGrab(i,b), AccHoofMaxIndGrab(i,b)]=max(HoofAcc((indsupportend:e),b));
+        AccHoofMaxPercentGrab(i,b)=percentgrab(AccHoofMaxIndGrab(i,b));
+        [AccHoofMinGrab(i,b), AccHoofMinIndGrab(i,b)]=min(HoofAcc((indsupportend:e),b));
+        AccHoofMinPercentGrab(i,b)=percentgrab(AccHoofMinIndGrab(i,b));
+        AccHoofAvgGrab(i,b)=mean(HoofAcc((indsupportend:e),b));
+        
+ 
+    %Resampling
+    numpts=500*StanceTime;
+    t=0:1:100;
+    
+    Carpalseries=timeseries(CarpalAngle(s:e), percent);
+    Fetlockseries=timeseries(FetlockAngle(s:e), percent);
+    PIPseries=timeseries(PIPAngle(s:e), percent);
+    DIPseries=timeseries(DIPAngle(s:e), percent);
+    Hoofseries=timeseries(SHA(s:e), percent);
+    
+    CarpalAngleNorm=resample(Carpalseries, t);
+    plot(CarpalAngleNorm, '*');
+    hold on;
+    plot(percent, CarpalAngle(s:e), '*');
+    
+    end
+    
+    %Write THT files
+    
+    
+    TimeTable1=ts2timetable(output);
+    Table1=table(PIIICORX,PIIICORY,PIICORX, PIICORY, PICORX, PICORY, MC3CORX, MC3CORY, DistCarpCORX, DistCarpCORY, RadiusCORX, RadiusCORY, ElbowCORX, ElbowCORY, ToeCORX, ToeCORY, HeelCORX, HeelCORY, GirthX, GirthY, CarpalAngle, FetlockAngle, PIPAngle, DIPAngle, SHA, AngVel, AngAcc);
+    Table1.Properties.VariableNames = {'PIIICORX' 'PIIICORY' 'PIICORX' 'PIICORY' 'PICORX' 'PICORY' 'MC3CORX' 'MC3CORY' 'DistCarpCORX' 'DistCarpCORY' 'RadiusCORX' 'RadiusCORY' 'ElbowCORX' 'ElbowCORY' 'ToeCORX' 'ToeCORY' 'HeelCORX' 'HeelCORY' 'GirthX' 'GirthY' 'CarpalAngle' 'FetlockAngle' 'PIPAngle' 'DIPAngle'  'HoofAngle'  'AngularVelocity' 'AngularAcceleration'};
+ 
+    
+    Table2=table(PIIICORXZero,PIIICORYZero,PIICORXZero, PIICORYZero, PICORXZero, PICORYZero, MC3CORXZero, MC3CORYZero, DistCarpCORXZero, DistCarpCORYZero, RadiusCORXZero, RadiusCORYZero, ElbowCORXZero, ElbowCORYZero, ToeCORXZero, ToeCORYZero, HeelCORXZero, HeelCORYZero, GirthXZero, GirthYZero, CarpalAngle, FetlockAngle, PIPAngle, DIPAngle, SHA, AngVel, AngAcc);
+    Table2.Properties.VariableNames = {'PIIICORX' 'PIIICORY' 'PIICORX' 'PIICORY' 'PICORX' 'PICORY' 'MC3CORX' 'MC3CORY' 'DistCarpCORX' 'DistCarpCORY' 'RadiusCORX' 'RadiusCORY' 'ElbowCORX' 'ElbowCORY' 'ToeCORX' 'ToeCORY' 'HeelCORX' 'HeelCORY' 'GirthX' 'GirthY' 'CarpalAngle' 'FetlockAngle' 'PIPAngle' 'DIPAngle'  'HoofAngle'  'AngularVelocity' 'AngularAcceleration'};
+ 
+    
+    if Save==1
+        
+    ExcelOutputName=(strcat('Raw_Data', char(trialheaders(i)),'.xlsx'));
+    writetable(Table1, ExcelOutputName, 'Sheet', 'RawPositionData');
+    
+    ExcelOutputName=(strcat('Zeroed_Data', char(trialheaders(i)),'.xlsx'));
+    writetable(Table2, ExcelOutputName, 'Sheet', 'ZeroedPositionData');
+    
+    end
+ 
+    %Define Output Variables
+    
+    Table3(i,:)=table(trialheaders(i), radiusdistancecheck, radiusmarkermotion, mc3distancecheck, mc3markermotion, p1distancecheck, p1markermotion, hoofwanddistancecheck, hoofwandmarkermotion, checkelbowCOR, checkradiusCOR, checkDistCarpCOR, checkMC3COR, checkPICOR);
+    Table3.Properties.VariableNames = {'TrialName' 'RadiusDistanceErrorMarkertoRadiograph[m]' 'RadiusMarkerMotion(m)' 'MC3DistanceErrorMarkertoRadiograph[m]' 'MC3MarkerMotion(m)' 'PIDistanceErrorMarkertoRadiograph[m]' 'PIMarkerMotion(m)' 'HoofWandDistanceErrorMarkertoRadiograph[m]' 'HoofWandMarkerMotion(m)' 'ElbowCORPercentError' 'RadiusCORPercentError' 'DistalCarpusCORPercentError' 'MC3CORPercentError' 'PICORPercentError'};
+    
+    Table4(i,:)=table(trialheaders(i), HoofStrike, HoofOff, StanceTime, Max(i,:), MaxPercentStance(i,:), Min(i,:), MinPercentStance(i,:), Avg(i,:), Integral(i,:), VelMax(i,:), VelMaxPercentStance(i,:), VelMin(i,:), VelMinPercentStance(i,:), VelAvg(i,:), AccMax(i,:), AccMaxPercentStance(i,:), AccMin(i,:), AccMinPercentStance(i,:), AccAvg(i,:));
+    Table4.Properties.VariableNames = {'TrialName' 'HoofStrike' 'HoofOff' 'StanceTime (s)' 'Maximum Joint Angle [Carp, Fet, PIP, DIP, Hoof] (deg)' 'Location Max Ang [Carp, Fet, PIP, DIP, Hoof](% Stance)' 'Minimum Joint Angle [Carp, Fet, PIP, DIP, Hoof] (deg)' 'Location Min Ang [Carp, Fet, PIP, DIP, Hoof] (% Stance)' 'Average Joint Angle [Carp, Fet, PIP, DIP, Hoof] (deg)' 'Joint Angular Impulse [Carp, Fet, PIP, DIP, Hoof] (deg*s)' 'Maximum Joint Ang Vel [Carp, Fet, PIP, DIP, Hoof] (deg/s)' 'Location Max Ang Vel [Carp, Fet, PIP, DIP, Hoof] (% Stance)' 'Minimum Joint Ang Vel [Carp, Fet, PIP, DIP, Hoof] (deg/s)' 'Location Min Ang Vel [Carp, Fet, PIP, DIP, Hoof] (% Stance)' 'Average Joint Ang Vel [Carp, Fet, PIP, DIP, Hoof] (deg/s)' 'Maximum Joint Ang Acc [Carp, Fet, PIP, DIP, Hoof] (deg/s^2)' 'Location Max Ang Acc [Carp, Fet, PIP, DIP, Hoof](% Stance)' 'Minimum Joint Ang Acc [Carp, Fet, PIP, DIP, Hoof] (deg/s^2)' 'Location Min Ang Acc [Carp, Fet, PIP, DIP, Hoof] (% Stance)' 'Average Joint Ang Acc [Carp, Fet, PIP, DIP, Hoof] (deg/s^2)'};
+    
+    Table5(i,:)=table(trialheaders(i), VelHorseMax(i,:), VelHorseMaxPercentStance(i,:), VelHorseMin(i,:), VelHorseMinPercentStance(i,:), VelHorseAvg(i,:), VelHorsePreStance(i,:), VelHorsePostStance(i,:), AccHorseMax(i,:), AccHorseMaxPercentStance(i,:), AccHorseMin(i,:), AccHorseMinPercentStance(i,:), AccHorseAvg(i,:), AccHorsePreStance(i,:), AccHorsePostStance(i,:));
+    Table5.Properties.VariableNames = {'TrialName' 'Max Horse Vel [X,Y,Total,Angle](m/s)' 'Location Max Vel [X,Y,Total,Angle](% Stance)' 'Min Horse Vel [X,Y,Total,Angle](m/s)' 'Location Min Vel [X,Y,Total,Angle](% Stance)' 'Average Horse Vel during Stance [X,Y,Total,Angle] (m/s)' 'Average Horse Vel before Stance [X,Y,Total,Angle] (m/s)' 'Average Horse Vel after Stance [X,Y,Total,Angle] (m/s)' 'Max Horse Acc [X,Y,Total,Angle](m/s^2)' 'Location Max Acc [X,Y,Total,Angle](% Stance)' 'Min Horse Acc [X,Y,Total,Angle](m/s^2)' 'Location Min Acc [X,Y,Total,Angle](% Stance)' 'Average Horse Acc during Stance [X,Y,Total,Angle] (m/s^2)' 'Average Horse Acc before Stance [X,Y,Total,Angle] (m/s^2)' 'Average Horse Acc after Stance [X,Y,Total,Angle] (m/s^2)'};
+    
+    Table6(i,:)=table(trialheaders(i), StanceTime, SlideTime, SupportTime, GrabTime, VelHoofMaxStance(i,:), VelHoofMaxPercentStance(i,:), VelHoofMinStance(i,:), VelHoofMinPercentStance(i,:), VelHoofAvgStance(i,:), VelHoofMaxSlide(i,:), VelHoofMaxPercentSlide(i,:), VelHoofMinSlide(i,:), VelHoofMinPercentSlide(i,:), VelHoofAvgSlide(i,:), VelHoofMaxSupport(i,:), VelHoofMaxPercentSupport(i,:), VelHoofMinSupport(i,:), VelHoofMinPercentSupport(i,:), VelHoofAvgSupport(i,:),VelHoofMaxGrab(i,:), VelHoofMaxPercentGrab(i,:), VelHoofMinGrab(i,:), VelHoofMinPercentGrab(i,:), VelHoofAvgGrab(i,:), AccHoofMaxStance(i,:), AccHoofMaxPercentStance(i,:), AccHoofMinStance(i,:), AccHoofMinPercentStance(i,:), AccHoofAvgStance(i,:), AccHoofMaxSlide(i,:), AccHoofMaxPercentSlide(i,:), AccHoofMinSlide(i,:), AccHoofMinPercentSlide(i,:), AccHoofAvgSlide(i,:), AccHoofMaxSupport(i,:), AccHoofMaxPercentSupport(i,:), AccHoofMinSupport(i,:), AccHoofMinPercentSupport(i,:), AccHoofAvgSupport(i,:),AccHoofMaxGrab(i,:), AccHoofMaxPercentGrab(i,:), AccHoofMinGrab(i,:), AccHoofMinPercentGrab(i,:), AccHoofAvgGrab(i,:));
+    Table6.Properties.VariableNames = {'TrialName' 'StanceTime (s)' 'SlideTime (s)' 'SupportTime (s)' 'GrabTime (s)' 'Max Vel Stance [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s)' 'Loc Max Vel[Toe(X,Y,Tot,Ang),Heel(X,Y,Tot,Ang)](% Stance)' 'Min Vel Stance [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s)' 'Loc Min Vel [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Stance)' 'Avg Vel Stance [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)] (m/s)' 'Max Vel Slide [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s)' 'Loc Max Vel [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Slide)' 'Min Vel Slide [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s)' 'Loc Min Vel [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Slide)' 'Avg Vel Slide [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)] (m/s)'  'Max Vel Support [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s)' 'Loc Max Vel [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Support)' 'Min Vel Support [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s)' 'Loc Min Vel [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Support)' 'Avg Vel Support [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)] (m/s)' 'Max Vel Grab [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s)' 'Loc Max Vel [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Grab)' 'Min Vel Grab [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s)' 'Loc Min Vel [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Grab)' 'Avg Vel Grab [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)] (m/s)' 'Max Acc Stance [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s^2)' 'Loc Max Acc [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Stance)' 'Min Acc Stance [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s^2)' 'Loc Min Acc [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Stance)' 'Avg Acc Stance [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)] (m/s^2)' 'Max Acc Slide [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s^2)' 'Loc Max Acc [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Slide)' 'Min Acc Slide [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s^2)' 'Loc Min Acc [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Slide)' 'Avg Acc Slide [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)] (m/s^2)'  'Max Acc Support [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s^2)' 'Loc Max Acc [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Support)' 'Min Acc Support [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s^2)' 'Loc Min Acc[Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Support)' 'Avg Acc Support [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)] (m/s^2)' 'Max Acc Grab [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s^2)' 'Loc Max Acc [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Grab)' 'Min Acc Grab [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](m/s^2)' 'Loc Min Acc [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)](% Grab)' 'Avg Acc Grab [Toe(X,Y,Tot,Ang), Heel(X,Y,Tot,Ang)] (m/s^2)'};
+ 
+clearvars -except Table3 Table4 Table5 Table6 P trialheaders freq Save evnts_name
+ 
+end
+ 
+%Write Output Calculation File
+ 
+    if Save==1
+        
+    ExcelOutputName=(strcat(evnts_name(1:5), '_Check_Radiograph', '.xlsx'));
+    writetable(Table3, ExcelOutputName, 'Sheet', 'CheckRadiograph');
+    
+    ExcelOutputName=(strcat(evnts_name(1:5), '_AnatomicalJointAngles_Output', '.xlsx'));
+    writetable(Table4, ExcelOutputName, 'Sheet', 'JointAngleOutput');
+    
+    ExcelOutputName=(strcat(evnts_name(1:5), '_AnatomicalJointAngles_Output', '.xlsx'));
+    writetable(Table5, ExcelOutputName, 'Sheet', 'HorseMVMTOutput');
+    
+    ExcelOutputName=(strcat(evnts_name(1:5), '_AnatomicalJointAngles_Output', '.xlsx'));
+    writetable(Table6, ExcelOutputName, 'Sheet', 'HoofMVMTOutput');
+   
+    end
